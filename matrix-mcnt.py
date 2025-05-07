@@ -3,6 +3,7 @@
 import asyncio
 import argparse
 import getpass
+import sys
 from nio import (
         AsyncClient,
         MatrixRoom,
@@ -19,34 +20,70 @@ USER_ID = f"@{USERNAME}:{HOME}"
 ROOM_IDS = []
 EXCLUDE_ROOM_IDS = []
 ACCESS_TOKEN = None
+USER_PASS = None
 
-
-async def client_login() -> AsyncClient:
+async def client_login(
+        hserv: str,
+        usr_id: str,
+        tk: str,
+        pw: str
+)-> AsyncClient:
     client = AsyncClient(HOME_SERVER, USER_ID)
-    #client = AsyncClient(f"https://{HOME}", f"@{USERNAME}:{HOME}") # need to decide on username format
+
     if ACCESS_TOKEN:
         client.access_token = ACCESS_TOKEN
-        # TODO: implement try-exception
         return client
-    passwd = getpass.getpass()
+
+    passwd = USER_PASS if USER_PASS else getpass.getpass()
     if isinstance(await client.login(passwd), LoginResponse):
         return client
-
     return None
 
+
 async def main() -> None:
-    client = await client_login()
+    client = None
 
-    if not client:
-        print(f"Could not log on to {USERNAME}")
-        exit()
-    else:
-        print(f"Logged on as {USERNAME}.")
+    try:
+        client = await client_login(HOME_SERVER, USER_ID, ACCESS_TOKEN, USER_PASS)
+        if not client:
+            print(f"Could not log on to {USERNAME} to {HOME}")
+            sys.exit(1)
+        print(f"Logged on as {USERNAME} to {HOME}")
+        await client.sync(timeout=30000)
 
-    await client.sync_forever(timeout=30000)
+        tmp_rooms = await get_rooms(client)
+        rooms = []
+        for room in tmp_rooms:
+            if room["room_id"] not in EXCLUDE_ROOM_IDS:
+                rooms.append(room)
 
-async def fetch_unread(client: AsyncClient):
-    exit() # TODO:
+        for room in rooms:
+            print(f"{room['room_id']} | {room['display_name']}")
+
+        # TODO: unread = sum_unread(rooms)
+
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        if client:
+            print("logging out.")
+            await client.logout()
+            await client.close()
+
+
+async def sum_unread(client: AsyncClient, rooms: list[dict]):
+    print("TODO")
+
+async def get_rooms(client: AsyncClient) -> list[dict]:
+    rooms = []
+
+    for room_id, room in client.rooms.items():
+        rooms.append({
+            "room_id": room_id,
+            "display_name": room.display_name,
+        })
+
+    return rooms
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -66,6 +103,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+            "--passwd",
+            help="Supply a password to prevent prompting"
+    )
+
+    parser.add_argument(
             "--homeserver",
             default=HOME,
             help="Supply homeserver domain (eg. 'matrix.org' or 'matrix.server.com')"
@@ -81,9 +123,9 @@ if __name__ == "__main__":
 
     parser.add_argument(
             "--exclude-rooms",
-            help="A list of Room(s) ID(s) to exclude (eg. '!Abcdefghijklmnopqr')",
+            help="A list of Room(s) ID(s) to exclude (eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq')",
+            nargs="+",
             default=[],
-            action="append",
     )
 
     parser.add_argument(
@@ -95,8 +137,10 @@ if __name__ == "__main__":
 
     HOME = args.homeserver
     USERNAME = args.username
+    USER_ID = f"@{USERNAME}:{HOME}"
     ROOM_IDS = args.rooms
     EXCLUDE_ROOM_IDS = args.exclude_rooms
     ACCESS_TOKEN = args.access_token
+    USER_PASS = args.passwd
 
     asyncio.run(main())
