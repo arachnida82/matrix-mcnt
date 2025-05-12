@@ -56,7 +56,6 @@ async def main() -> None:
                 timeout=30000,
                 full_state=True
         )
-        #print(f"Logged on as {USERNAME} to {HOME}")
 
         tmp_rooms = await get_rooms(client, sync_resp)
         rooms = []
@@ -84,7 +83,6 @@ async def main() -> None:
             await client.logout()
             await client.close()
 
-# SEE: room_context(), events.room_events.Event(),  room_read_markers, and responses.RoomInfo()  with unread_notifications
 async def sum_unread(client: AsyncClient, rooms: list[dict]) -> int:
     return sum(room["unread_count"] for room in rooms)
 
@@ -92,11 +90,8 @@ async def get_rooms(client: AsyncClient, sync_response) -> list[dict]:
     rooms = []
 
     for room_id, room in client.rooms.items():
-        # Skip if we have INCLUDE_ONLY_ROOM_IDS and this room isn't in it
         if INCLUDE_ONLY_ROOM_IDS and room_id not in INCLUDE_ONLY_ROOM_IDS:
             continue
-
-        # Skip if this room is in EXCLUDE_ROOM_IDS
         if room_id in EXCLUDE_ROOM_IDS:
             continue
 

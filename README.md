@@ -5,7 +5,10 @@ Matrix message count outputs the number of unread messages of all or of specifie
 
 
 # Usage
+```
 python3 matrix-mcnt.py --username USERNAME [options]
+```
+
 ```
 Required arguments:
   --username USERNAME     Your Matrix username without the @username:matrix.org format
