@@ -9,7 +9,10 @@ from nio import (
         MatrixRoom,
         RoomMessageText,
         LoginResponse,
-        RoomInfo
+        RoomInfo,
+        responses,
+        RoomMessagesResponse,
+        RoomReadMarkersResponse
 )
 
 
@@ -19,6 +22,7 @@ USERNAME = None
 USER_ID = f"@{USERNAME}:{HOME}"
 ROOM_IDS = []
 EXCLUDE_ROOM_IDS = []
+INCLUDE_ONLY_ROOM_IDS = []
 ACCESS_TOKEN = None
 USER_PASS = None
 
@@ -48,19 +52,30 @@ async def main() -> None:
         if not client:
             print(f"Could not log on to {USERNAME} to {HOME}")
             sys.exit(1)
+        sync_resp = await client.sync(
+                timeout=30000,
+                full_state=True
+        )
         print(f"Logged on as {USERNAME} to {HOME}")
-        await client.sync(timeout=30000)
 
-        tmp_rooms = await get_rooms(client)
+        tmp_rooms = await get_rooms(client, sync_resp)
         rooms = []
         for room in tmp_rooms:
-            if room["room_id"] not in EXCLUDE_ROOM_IDS:
+            if len(INCLUDE_ONLY_ROOM_IDS) > 0 and (len(EXCLUDE_ROOM_IDS) == 0):
+                if room["room_id"] in INCLUDE_ONLY_ROOM_IDS:
+                    rooms.append(room)
+            elif len(INCLUDE_ONLY_ROOM_IDS) == 0 and (len(EXCLUDE_ROOM_IDS) > 0):
+                if room["room_id"] not in EXCLUDE_ROOM_IDS:
+                    rooms.append(room)
+            else:
                 rooms.append(room)
 
-        for room in rooms:
-            print(f"{room['room_id']} | {room['display_name']}")
+        if args.print_rooms:
+            for room in rooms:
+                print(f"{room['room_id']} | {room['display_name']} | Unread: {room['unread_count']}")
 
-        # TODO: unread = sum_unread(rooms)
+        num_unread = await sum_unread(client, rooms)
+        print(f"unread messages: {num_unread}")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -70,17 +85,43 @@ async def main() -> None:
             await client.logout()
             await client.close()
 
+async def get_events(client: AsyncClient, room: MatrixRoom) -> list:
+    response = await client.room_messages(
+            room.room_id,
+            start="",
+            limit=100
+    )
 
-async def sum_unread(client: AsyncClient, rooms: list[dict]):
-    print("TODO")
+    if response and hasattr(response, "chunk"):
+        return response.chunk
+    return []
 
-async def get_rooms(client: AsyncClient) -> list[dict]:
+# SEE: room_context(), events.room_events.Event(),  room_read_markers, and responses.RoomInfo()  with unread_notifications
+async def sum_unread(client: AsyncClient, rooms: list[dict]) -> int:
+    return sum(room["unread_count"] for room in rooms)
+
+async def get_rooms(client: AsyncClient, sync_response) -> list[dict]:
     rooms = []
 
     for room_id, room in client.rooms.items():
+        # Skip if we have INCLUDE_ONLY_ROOM_IDS and this room isn't in it
+        if INCLUDE_ONLY_ROOM_IDS and room_id not in INCLUDE_ONLY_ROOM_IDS:
+            continue
+
+        # Skip if this room is in EXCLUDE_ROOM_IDS
+        if room_id in EXCLUDE_ROOM_IDS:
+            continue
+
+        unread = 0
+        if room_id in sync_response.rooms.join:
+            room_info = sync_response.rooms.join[room_id]
+            if hasattr(room_info, "unread_notifications"):
+                unread = room_info.unread_notifications.notification_count
+
         rooms.append({
             "room_id": room_id,
             "display_name": room.display_name,
+            "unread_count": unread
         })
 
     return rooms
@@ -115,22 +156,22 @@ if __name__ == "__main__":
 
     parser.add_argument(
             "--rooms",
-            help="Room ID(s) (eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq')." +
-                 "matrix-mcnt will only count the supplied ID(s).",
+            help="A list of Room(s) ID(s) to strictly include (eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq')",
+            nargs="+",
             default=[],
-            action="append",
     )
 
     parser.add_argument(
             "--exclude-rooms",
-            help="A list of Room(s) ID(s) to exclude (eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq')",
+            help="A list of Room(s) ID(s) to strictly exclude (eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq')",
             nargs="+",
             default=[],
     )
 
     parser.add_argument(
             "--print-rooms",
-            help="Print all available rooms"
+            help="Print all available rooms",
+            action="store_true"
     )
 
     args = parser.parse_args()
@@ -140,6 +181,7 @@ if __name__ == "__main__":
     USER_ID = f"@{USERNAME}:{HOME}"
     ROOM_IDS = args.rooms
     EXCLUDE_ROOM_IDS = args.exclude_rooms
+    INCLUDE_ONLY_ROOM_IDS = args.rooms
     ACCESS_TOKEN = args.access_token
     USER_PASS = args.passwd
 
