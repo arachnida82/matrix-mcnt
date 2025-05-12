@@ -56,7 +56,7 @@ async def main() -> None:
                 timeout=30000,
                 full_state=True
         )
-        print(f"Logged on as {USERNAME} to {HOME}")
+        #print(f"Logged on as {USERNAME} to {HOME}")
 
         tmp_rooms = await get_rooms(client, sync_resp)
         rooms = []
@@ -74,27 +74,15 @@ async def main() -> None:
             for room in rooms:
                 print(f"{room['room_id']} | {room['display_name']} | Unread: {room['unread_count']}")
 
-        num_unread = await sum_unread(client, rooms)
-        print(f"unread messages: {num_unread}")
+        print(await sum_unread(client, rooms))
 
     except Exception as e:
         print(f"Error: {e}")
     finally:
         if client:
-            print("logging out.")
+            #print("logging out.")
             await client.logout()
             await client.close()
-
-async def get_events(client: AsyncClient, room: MatrixRoom) -> list:
-    response = await client.room_messages(
-            room.room_id,
-            start="",
-            limit=100
-    )
-
-    if response and hasattr(response, "chunk"):
-        return response.chunk
-    return []
 
 # SEE: room_context(), events.room_events.Event(),  room_read_markers, and responses.RoomInfo()  with unread_notifications
 async def sum_unread(client: AsyncClient, rooms: list[dict]) -> int:
