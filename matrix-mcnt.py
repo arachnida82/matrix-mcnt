@@ -1,74 +1,66 @@
 #!/usr/bin/env python3
 
+"""
+matrix-mcnt: A CLI script to count unread messages from a Matrix account.
+"""
+
 import asyncio
 import argparse
 import getpass
 import sys
-from nio import (
+from nio import(
         AsyncClient,
         MatrixRoom,
         RoomMessageText,
         LoginResponse,
         RoomInfo,
-        responses,
-        RoomMessagesResponse,
-        RoomReadMarkersResponse
+        responses
 )
-
-
-HOME = "matrix.org"
-HOME_SERVER = f"https://{HOME}"
-USERNAME = None
-USER_ID = f"@{USERNAME}:{HOME}"
-ROOM_IDS = []
-EXCLUDE_ROOM_IDS = []
-INCLUDE_ONLY_ROOM_IDS = []
-ACCESS_TOKEN = None
-USER_PASS = None
+from typing import Optional
 
 async def client_login(
         hserv: str,
         usr_id: str,
-        tk: str,
+        tkn: str,
         pw: str
-)-> AsyncClient:
-    client = AsyncClient(HOME_SERVER, USER_ID)
+) -> Optional[AsyncClient]:
+    client = AsyncClient(hserv, usr_id)
 
-    if ACCESS_TOKEN:
-        client.access_token = ACCESS_TOKEN
+    if tkn:
+        client.access_token = tkn
         return client
 
-    passwd = USER_PASS if USER_PASS else getpass.getpass()
-    if isinstance(await client.login(passwd), LoginResponse):
-        return client
-    return None
+    passwd = pw if pw else getpass.getpass()
+    if not isinstance(await client.login(passwd), LoginResponse):
+        return None
+    return client
 
 
-async def main() -> None:
+async def main(args) -> None:
     client = None
 
+    HOME = args.homeserver
+    USERNAME = args.username
+    USER_ID = f"@{USERNAME}:{HOME}"
+    EXCLUDE = args.exclude_rooms
+    INCLUDE = args.rooms
+    # TODO FIX: Bad
+    ACCESS_TOKEN = args.access_token
+    USER_PASS = args.passwd
+
     try:
-        client = await client_login(HOME_SERVER, USER_ID, ACCESS_TOKEN, USER_PASS)
+        client = await client_login(
+               f"https://{HOME}", USER_ID, ACCESS_TOKEN, USER_PASS)
         if not client:
-            print(f"Could not log on to {USERNAME} to {HOME}")
             sys.exit(1)
-        sync_resp = await client.sync(
-                timeout=30000,
-                full_state=True
-        )
 
-        tmp_rooms = await get_rooms(client, sync_resp)
-        rooms = []
-        for room in tmp_rooms:
-            if len(INCLUDE_ONLY_ROOM_IDS) > 0 and (len(EXCLUDE_ROOM_IDS) == 0):
-                if room["room_id"] in INCLUDE_ONLY_ROOM_IDS:
-                    rooms.append(room)
-            elif len(INCLUDE_ONLY_ROOM_IDS) == 0 and (len(EXCLUDE_ROOM_IDS) > 0):
-                if room["room_id"] not in EXCLUDE_ROOM_IDS:
-                    rooms.append(room)
-            else:
-                rooms.append(room)
-
+        sync_resp = await client.sync(timeout=30000, full_state=True)
+        rooms = await get_rooms(
+                client,
+                sync_resp,
+                INCLUDE,
+                EXCLUDE
+                )
         if args.print_rooms:
             for room in rooms:
                 print(f"{room['room_id']} | {room['display_name']} | Unread: {room['unread_count']}")
@@ -79,16 +71,20 @@ async def main() -> None:
         print(f"Error: {e}")
     finally:
         if client:
-            #print("logging out.")
             await client.logout()
             await client.close()
 
 async def sum_unread(client: AsyncClient, rooms: list[dict]) -> int:
     return sum(room["unread_count"] for room in rooms)
 
-async def get_rooms(client: AsyncClient, sync_response) -> list[dict]:
-    rooms = []
+async def get_rooms(
+        client: AsyncClient,
+        sync_response,
+        INCLUDE_ONLY_ROOM_IDS: list[str],
+        EXCLUDE_ROOM_IDS: list[str]
+) -> list[dict]:
 
+    rooms = []
     for room_id, room in client.rooms.items():
         if INCLUDE_ONLY_ROOM_IDS and room_id not in INCLUDE_ONLY_ROOM_IDS:
             continue
@@ -133,8 +129,8 @@ if __name__ == "__main__":
 
     parser.add_argument(
             "--homeserver",
-            default=HOME,
-            help="Supply homeserver domain (eg. 'matrix.org' or 'matrix.server.com')"
+            default="matrix.org",
+            help="eg. 'matrix.org' or 'matrix.server.com'"
     )
 
     parser.add_argument(
@@ -146,26 +142,21 @@ if __name__ == "__main__":
 
     parser.add_argument(
             "--exclude-rooms",
-            help="A list of Room(s) ID(s) to strictly exclude (eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq')",
+            help="Room IDs to strictly exclude eg. '!Abcdefghijklmnopqr' '!2Abcdefghijklmnopq'",
             nargs="+",
             default=[],
     )
 
     parser.add_argument(
             "--print-rooms",
-            help="Print all available rooms",
+            help="Print all matching rooms",
             action="store_true"
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+            "--bg",
+            help="Run script in background"
+            # TODO: let run in background, updating in real time.
+    )
 
-    HOME = args.homeserver
-    USERNAME = args.username
-    USER_ID = f"@{USERNAME}:{HOME}"
-    ROOM_IDS = args.rooms
-    EXCLUDE_ROOM_IDS = args.exclude_rooms
-    INCLUDE_ONLY_ROOM_IDS = args.rooms
-    ACCESS_TOKEN = args.access_token
-    USER_PASS = args.passwd
-
-    asyncio.run(main())
+    asyncio.run(main(parser.parse_args()))

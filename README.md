@@ -55,6 +55,9 @@ source env/bin/activate
 pip install -r requirements.txt
 ```
 
+# Notes
+**Rate limits**. Depend on home server configuration. Use --bg instead.
+
 
 # Licensing and Acknowledgement
 The Matrix Message Count program (matrix-mcnt) is licensed under [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). It uses [matrix-nio](https://github.com/matrix-nio/matrix-nio) under the [Apache-2.0 license](https://www.apache.org/licenses/LICENSE-2.0.html) and [Internet Systems Consortium license (ISC)](https://www.isc.org/licenses/). A copy of the GPL-3.0 license has been produced [below](https://github.com/arachnida82/matrix-mcnt/blob/main/LICENSE.txt).
