@@ -8,6 +8,7 @@ import asyncio
 import argparse
 import getpass
 import sys
+import subprocess
 from nio import(
         AsyncClient,
         MatrixRoom,
@@ -18,23 +19,38 @@ from nio import(
 )
 from typing import Optional
 
+
+async def get_creds(pw_path: str) -> Optional[str]:
+    try:
+        res = subprocess.run(
+                ["pass", pw_path],
+                capture_output=True,
+                text=True,
+                check=True
+              )
+        return res.stdout.strip()
+    except FileNotFoundError:
+            print(f"Warning: 'pass' command not found", file=sys.stderr)
+            return None
+    except subprocess.CalledProcessError as e:
+        if e.stderr:
+            print(f"Warning: Failed to get password from store: {e.stderr.strip()}",
+            file=sys.stderr)
+        return None
+
 async def client_login(
         hserv: str,
         usr_id: str,
-        tkn: str,
-        pw: str
+        pw_path: str
 ) -> Optional[AsyncClient]:
     client = AsyncClient(hserv, usr_id)
 
-    if tkn:
-        client.access_token = tkn
-        return client
+    #passwd = await get_creds(pw_path) or getpass.getpass()
+    passwd = await get_creds(pw_path) or getpass.getpass(f"Password for {usr_id}: ")
 
-    passwd = pw if pw else getpass.getpass()
     if not isinstance(await client.login(passwd), LoginResponse):
         return None
     return client
-
 
 async def main(args) -> None:
     client = None
@@ -44,13 +60,11 @@ async def main(args) -> None:
     USER_ID = f"@{USERNAME}:{HOME}"
     EXCLUDE = args.exclude_rooms
     INCLUDE = args.rooms
-    # TODO FIX: Bad
-    ACCESS_TOKEN = args.access_token
-    USER_PASS = args.passwd
+    PW_PATH = args.pass_path
 
     try:
         client = await client_login(
-               f"https://{HOME}", USER_ID, ACCESS_TOKEN, USER_PASS)
+               f"https://{HOME}", USER_ID, PW_PATH)
         if not client:
             sys.exit(1)
 
@@ -118,13 +132,8 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-            "--access-token",
-            help="Supply an access token to prevent password prompting"
-    )
-
-    parser.add_argument(
-            "--passwd",
-            help="Supply a password to prevent prompting"
+            "--pass-path",
+            help="Password-store path ie. 'Matrix/my_user_name/access-token'" + "or 'Matrix/my_user_name/pass'",
     )
 
     parser.add_argument(

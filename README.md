@@ -45,8 +45,13 @@ $: python3 matrix-mcnt.py --username 'alice' --passwd $(pass Element/alice)
 
 
 # Install
+1. **Prerequisites**
+- Python 3.x
+- matrix-nio
+- (Optional) [pass](https://www.passwordstore.org/) to prevent password prompting
 
-1. Clone the repo and satisfy its dependencies
+
+2. Clone the repo and satisfy its dependencies
 ```
 git clone https://github.com/arachnida82/matrix-mcnt
 cd matrix-mcnt
