@@ -14,8 +14,8 @@ Required arguments:
   --username USERNAME     Your Matrix username without the @username:matrix.org format
 
 Optional arguments:
-  --access-token TOKEN  Use access token instead of password authentication
-  --passwd PASSWORD     Supply password in command line (otherwise will prompt)
+  --bg                  Syncronize in the background
+  --pass-path           A path to a password-store file (e.g., 'Matrix/my_user_name/pass')
   --homeserver SERVER   Matrix homeserver (default: matrix.org)
   --rooms ROOM_IDS      List of room IDs to include (all non-specified rooms will be excluded)
   --exclude-rooms IDS   List of room IDs to exclude
@@ -23,24 +23,32 @@ Optional arguments:
 ```
 
 **Examples:**
-
-- get unread count for all rooms
-
+- Get unread count for all rooms using pass:
+```bash
+$ python3 matrix-mcnt.py --username 'myusername' --pass-path 'Matrix/myusername/passwd'
+42
+$ python3 matrix-mcnt.py --username 'myusername' --pass-path 'Matrix/myusername/access-token'
+42
 ```
-$: python3 matrix-mcnt.py --username 'alice' --passwd 'alicespassword123'
-23 # 23 unread messages
+
+- Using a custom home-server without `pass` and excluding a room from the result:
+```bash
+$ python3 matrix-mcnt.py --username 'myusername' --homeserver 'matrix.myserver.com' --exclude-room '!Abcdefghijklmnopqr'
+Password for @myusername:matrix.myserver.com:
+38 # 38 unread messages not including those from '!Abcdefghijklmnopqr'
 ```
 
-- Get unread count for specific rooms
-```
-$: python3 matrix-mcnt.py --username 'alice' --passwd 'alicespassword123' --rooms '!Abcdefghijklmnopq' '!Bbcdefghijklmnopq'
+- Include only a specific room
+```bash
+$ python3 matrix-mcnt.py --username 'myusername' --room '!Abcdefghijklmnopqr'
+Password for @myusername:matrix.org:
 4
 ```
 
-- Using `pass` to supply user password
-```
-$: python3 matrix-mcnt.py --username 'alice' --passwd $(pass Element/alice)
-12
+- Pipe `stderr` to `/dev/null` while running in the background
+```bash
+$ (python3.13 matrix-mcnt.py --username 'myuser' --pass-path 'Matrix/myuser/passwd' --bg) 2> /dev/null
+1 # Updates every FETCH_DELAY seconds
 ```
 
 
@@ -51,8 +59,8 @@ $: python3 matrix-mcnt.py --username 'alice' --passwd $(pass Element/alice)
 - (Optional) [pass](https://www.passwordstore.org/) to prevent password prompting
 
 
-2. Clone the repo and satisfy its dependencies
-```
+2. **Clone the repo and satisfy its dependencies**
+```bash
 git clone https://github.com/arachnida82/matrix-mcnt
 cd matrix-mcnt
 python3.13 -m venv env
@@ -61,7 +69,7 @@ pip install -r requirements.txt
 ```
 
 # Notes
-**Rate limits**. Depend on home server configuration. Use --bg instead.
+**Rate limits**. Depends on the home servers configuration. 30 seconds should be sufficient, but you can update `FETCH_DELAY` in [matrix-mcnt.py](https://github.com/arachnida82/matrix-mcnt/blob/main/matrix-mcnt.py#L22)
 
 
 # Licensing and Acknowledgement
