@@ -19,6 +19,7 @@ from nio import(
 )
 from typing import Optional
 
+FETCH_DELAY = 30 # if running in the background, check for new messages every 30 seconds
 
 async def get_creds(pw_path: str) -> Optional[str]:
     try:
@@ -45,7 +46,6 @@ async def client_login(
 ) -> Optional[AsyncClient]:
     client = AsyncClient(hserv, usr_id)
 
-    #passwd = await get_creds(pw_path) or getpass.getpass()
     passwd = await get_creds(pw_path) or getpass.getpass(f"Password for {usr_id}: ")
 
     if not isinstance(await client.login(passwd), LoginResponse):
@@ -79,8 +79,30 @@ async def main(args) -> None:
             for room in rooms:
                 print(f"{room['room_id']} | {room['display_name']} | Unread: {room['unread_count']}")
 
-        print(await sum_unread(client, rooms))
+        if args.bg:
+            try:
+                next_batch = sync_resp.next_batch
+                while True:
+                    sync_resp = await client.sync(
+                        timeout=10000,
+                        since=next_batch,
+                        full_state=True
+                    )
+                    next_batch = sync_resp.next_batch
+                    rooms = await get_rooms(
+                            client,
+                            sync_resp,
+                            INCLUDE,
+                            EXCLUDE
+                    )
 
+                    print('\r', end='')
+                    print(await sum_unread(client, rooms), end='', flush=True)
+                    await asyncio.sleep(FETCH_DELAY)
+            except KeyboardInterrupt:
+                print("\nStopping background sync...")
+        else:
+            print(await sum_unread(client, rooms))
     except Exception as e:
         print(f"Error: {e}")
     finally:
@@ -164,8 +186,8 @@ if __name__ == "__main__":
 
     parser.add_argument(
             "--bg",
-            help="Run script in background"
-            # TODO: let run in background, updating in real time.
+            help="Run script in background",
+            action="store_true"
     )
 
     asyncio.run(main(parser.parse_args()))
